@@ -1,5 +1,5 @@
 # 🦊 Decko — AI Cyber Assistant  v2.0
-### Graduation Project · Complete Edition
+
 
 ---
 
