@@ -1,0 +1,45 @@
+name: "Ransomware Containment"
+description: >
+  Emergency containment playbook for ransomware detection.
+  Steps are simulated — no actual system changes are made.
+severity: CRITICAL
+author: Decko Security
+version: "1.0"
+
+steps:
+  - name: "Raise Critical Alert"
+    type: alert
+    level: CRITICAL
+    message: "Ransomware behavior detected — mass file encryption observed!"
+
+  - name: "Identify Affected Scope"
+    type: log
+    message: "Scanning for affected directories and file rename patterns."
+
+  - name: "Check Shadow Copies"
+    type: check_port
+    host: "127.0.0.1"
+    port: 135
+    description: "Verify RPC endpoint for VSS service availability"
+
+  - name: "Simulate Network Isolation"
+    type: quarantine
+    file: "AFFECTED_HOST"
+    description: "Simulated: Block all outbound traffic on affected host"
+
+  - name: "Alert Management"
+    type: alert
+    level: CRITICAL
+    message: "CISO and IR team notified. External forensics firm engaged."
+
+  - name: "Initiate Backup Restore"
+    type: log
+    message: "Initiating restore from last verified clean backup (T-24h)."
+
+  - name: "Document Timeline"
+    type: generate_report
+    description: "Timestamped incident timeline generated for regulatory reporting"
+
+  - name: "Post-Incident"
+    type: log
+    message: "Containment complete. Monitoring for re-infection indicators."
