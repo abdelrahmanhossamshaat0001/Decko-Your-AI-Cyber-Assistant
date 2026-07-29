@@ -169,5 +169,6 @@ Decko is designed **exclusively for authorized defensive security work**.
 ---
 
 ## Built by
-**Decko Team** · Graduation Project · 2025  
+AbdElrahman Hossam
+
 *TKBW — Think, Know, Build, Work Smart.*
