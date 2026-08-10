@@ -1,4 +1,4 @@
-# 🦊 Decko — AI Cyber Assistant  v2.0
+# 🦊 Decko — AI Cyber Assistant  
 
 
 ---
