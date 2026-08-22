@@ -14,6 +14,10 @@ import base64
 import string
 import random
 import threading
+import subprocess
+import shutil
+import zipfile
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -54,6 +58,104 @@ except ImportError:
 
 
 # ════════════════════════════════════════════════════════════════════════════
+#  EXTERNAL TOOL DISCOVERY  —  auto-detects real tools under DeckoTools/,
+#  no manual PATH setup needed. Falls back gracefully if a tool is missing.
+# ════════════════════════════════════════════════════════════════════════════
+
+PROJECT_DIR     = Path(__file__).resolve().parent
+DECKO_TOOLS_DIR = Path(os.getenv("DECKO_TOOLS_DIR", str(PROJECT_DIR / "DeckoTools")))
+YARA_RULES_DIR  = PROJECT_DIR / "yara_rules"
+
+_tool_path_cache: dict = {}
+
+
+def _extract_zip_if_needed(zip_stem: str) -> None:
+    """Auto-unzip DeckoTools/<zip_stem>.zip the first time it's needed."""
+    zip_path = DECKO_TOOLS_DIR / f"{zip_stem}.zip"
+    marker   = DECKO_TOOLS_DIR / f".{zip_stem}_extracted"
+    if not zip_path.exists() or marker.exists():
+        return
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            destination = (DECKO_TOOLS_DIR / zip_stem).resolve()
+            for member in zf.infolist():
+                member_path = (destination / member.filename).resolve()
+                if destination not in member_path.parents and member_path != destination:
+                    raise ValueError(f"Unsafe path in archive: {member.filename}")
+            zf.extractall(destination)
+        marker.touch()
+    except Exception:
+        pass
+
+
+def find_tool(key: str, filenames: list, zip_stem: str = None) -> str:
+    """
+    Locate a real external tool's executable/script.
+    Search order: cache -> system PATH -> recursive search under DeckoTools/
+    -> auto-extract a matching .zip under DeckoTools/ and search again.
+    Returns the full path as a string, or "" if the tool isn't found anywhere.
+    """
+    if key in _tool_path_cache:
+        return _tool_path_cache[key]
+
+    for name in filenames:
+        found = shutil.which(name)
+        if found:
+            _tool_path_cache[key] = found
+            return found
+
+    if DECKO_TOOLS_DIR.exists():
+        for name in filenames:
+            for match in DECKO_TOOLS_DIR.rglob(name):
+                if match.is_file():
+                    _tool_path_cache[key] = str(match)
+                    return str(match)
+
+    if zip_stem:
+        _extract_zip_if_needed(zip_stem)
+        if DECKO_TOOLS_DIR.exists():
+            for name in filenames:
+                for match in DECKO_TOOLS_DIR.rglob(name):
+                    if match.is_file():
+                        _tool_path_cache[key] = str(match)
+                        return str(match)
+
+    _tool_path_cache[key] = ""
+    return ""
+
+
+def get_tools_status() -> dict:
+    """Report which real external tools were actually found on this machine."""
+    checks = {
+        "nmap":     (["nmap.exe", "nmap"], None),
+        "sqlmap":   (["sqlmap.py"], None),
+        "john":     (["john.exe", "john"], "john-1.9.0-jumbo-1-win64"),
+        "yara":     (["yara64.exe", "yara.exe", "yara"], None),
+        "nikto":    (["nikto.pl"], None),
+        "gobuster": (["gobuster.exe", "gobuster"], "gobuster_Windows_x86_64"),
+        "nuclei":   (["nuclei.exe", "nuclei"], "nuclei_3.11.0_windows_amd64"),
+    }
+    status = {}
+    for key, (names, zstem) in checks.items():
+        path = find_tool(key, names, zstem)
+        status[key] = path or None
+    return status
+
+
+def print_tools_banner() -> None:
+    status = get_tools_status()
+    found   = [k for k, v in status.items() if v]
+    missing = [k for k, v in status.items() if not v]
+    print(f"[DECKO TOOLS] Detected  : {found or 'none'}")
+    print(f"[DECKO TOOLS] Not found : {missing or 'none'}")
+    if missing:
+        print(f"[DECKO TOOLS] Looked under: {DECKO_TOOLS_DIR}")
+
+
+print_tools_banner()
+
+
+# ════════════════════════════════════════════════════════════════════════════
 #  NETWORK TOOLS
 # ════════════════════════════════════════════════════════════════════════════
 
@@ -68,7 +170,37 @@ COMMON_PORTS = {
 RISKY_PORTS = {21, 23, 135, 139, 445, 3389, 5900, 6379, 27017}
 
 
+def _nmap_scan(target: str) -> str:
+    """Run a real Nmap scan if the binary was found; empty string if not."""
+    nmap_exe = find_tool("nmap", ["nmap.exe", "nmap"])
+    if not nmap_exe:
+        return ""
+    try:
+        proc = subprocess.run(
+            [nmap_exe, "-T4", "-sV", "-Pn", "--top-ports", "100", target],
+            capture_output=True, text=True, timeout=180,
+        )
+        out = (proc.stdout or proc.stderr or "").strip()
+        return out
+    except Exception as e:
+        return f"[nmap error] {e}"
+
+
 def scan_ports(target: str, timeout: float = 0.6) -> str:
+    """Real Nmap scan when nmap is available on this machine, otherwise
+    a built-in TCP connect scan of common service ports."""
+    nmap_out = _nmap_scan(target)
+    if nmap_out:
+        return (
+            f"┌─[ NMAP SCAN — {target} ]────────────────────────\n"
+            f"│ Engine : real nmap ({find_tool('nmap', ['nmap.exe','nmap'])})\n"
+            f"└─────────────────────────────────────────────────\n\n"
+            f"{nmap_out}"
+        )
+    return _scan_ports_builtin(target, timeout)
+
+
+def _scan_ports_builtin(target: str, timeout: float = 0.6) -> str:
     """TCP connect scan of common service ports on an authorized target."""
     lines = [
         f"┌─[ DECKO NETWORK SCAN ]──────────────────────────",
@@ -103,11 +235,104 @@ def scan_ports(target: str, timeout: float = 0.6) -> str:
     return "\n".join(lines)
 
 
+_DEFAULT_WORDLIST = [
+    "admin", "login", "backup", "config", "test", "api", "dev", "staging",
+    "uploads", "images", "assets", "old", "tmp", "db", "data", "private",
+    "wp-admin", "phpmyadmin", "console", "dashboard", "panel", "secret",
+]
+
+
+def _gobuster_scan(url: str) -> str:
+    """Run real Gobuster directory brute-force if the binary was found."""
+    gobuster_exe = find_tool("gobuster", ["gobuster.exe", "gobuster"],
+                              zip_stem="gobuster_Windows_x86_64")
+    if not gobuster_exe:
+        return ""
+    wordlist_path = ""
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+            f.write("\n".join(_DEFAULT_WORDLIST))
+            wordlist_path = f.name
+        proc = subprocess.run(
+            [gobuster_exe, "dir", "-u", url, "-w", wordlist_path,
+             "-t", "20", "-q", "--timeout", "5s"],
+            capture_output=True, text=True, timeout=90,
+        )
+        return (proc.stdout or proc.stderr or "").strip()
+    except Exception as e:
+        return f"[gobuster error] {e}"
+    finally:
+        try:
+            os.unlink(wordlist_path)
+        except Exception:
+            pass
+
+
+def sqlmap_scan(url: str, extra_args: list = None) -> str:
+    """Run real sqlmap against a URL (authorized testing only)."""
+    sqlmap_py = find_tool("sqlmap", ["sqlmap.py"])
+    if not sqlmap_py:
+        return "[!] sqlmap.py not found under DeckoTools/ — check sqlmap-master was extracted"
+    import sys as _sys
+    cmd = [_sys.executable, sqlmap_py, "-u", url, "--batch", "--level=1", "--risk=1"]
+    if extra_args:
+        cmd += extra_args
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        return (proc.stdout or proc.stderr or "").strip()
+    except Exception as e:
+        return f"[sqlmap error] {e}"
+
+
+def nikto_scan(url: str) -> str:
+    """Run real Nikto against a URL (requires Perl on PATH)."""
+    nikto_pl = find_tool("nikto", ["nikto.pl"])
+    if not nikto_pl:
+        return "[!] nikto.pl not found under DeckoTools/ — check nikto-main folder"
+    perl = shutil.which("perl")
+    if not perl:
+        return "[!] Perl not found on PATH — install Strawberry Perl to run Nikto on Windows"
+    try:
+        proc = subprocess.run([perl, nikto_pl, "-h", url],
+                               capture_output=True, text=True, timeout=180)
+        return (proc.stdout or proc.stderr or "").strip()
+    except Exception as e:
+        return f"[nikto error] {e}"
+
+
+def nuclei_scan(target: str) -> str:
+    """Run real Nuclei against a target (authorized testing only)."""
+    nuclei_exe = find_tool("nuclei", ["nuclei.exe", "nuclei"],
+                            zip_stem="nuclei_3.11.0_windows_amd64")
+    if not nuclei_exe:
+        return "[!] nuclei not found under DeckoTools/ — check the zip was extracted"
+    try:
+        proc = subprocess.run([nuclei_exe, "-u", target, "-silent"],
+                               capture_output=True, text=True, timeout=180)
+        return (proc.stdout or proc.stderr or "").strip() or "[+] No findings"
+    except Exception as e:
+        return f"[nuclei error] {e}"
+
+
 def web_directory_fuzzer(url: str, timeout: int = 4) -> str:
-    """Check web surface exposure — common sensitive paths and security headers."""
+    """Check web surface exposure — real Gobuster run (if available) plus
+    a built-in check of common sensitive paths and security headers."""
     if not url.startswith(("http://", "https://")):
         url = "http://" + url
 
+    gobuster_out = _gobuster_scan(url)
+    builtin_out  = _web_directory_fuzzer_builtin(url, timeout)
+
+    if gobuster_out:
+        return (
+            f"┌─[ GOBUSTER (real) ]─────────────────────────────\n"
+            f"{gobuster_out}\n\n"
+            f"{builtin_out}"
+        )
+    return builtin_out
+
+
+def _web_directory_fuzzer_builtin(url: str, timeout: int = 4) -> str:
     sensitive_paths = [
         "/admin", "/login", "/wp-admin", "/phpmyadmin", "/dashboard",
         "/.env", "/.git/config", "/config", "/backup", "/backup.zip",
@@ -166,7 +391,64 @@ def web_directory_fuzzer(url: str, timeout: int = 4) -> str:
 #  HASH & CRYPTO
 # ════════════════════════════════════════════════════════════════════════════
 
+_JOHN_FORMAT = {32: "raw-md5", 40: "raw-sha1", 64: "raw-sha256"}
+
+
+def _john_crack(hash_value: str, wordlist: list) -> str:
+    """Run real John the Ripper against the hash. Returns '' if unavailable
+    or if John itself couldn't be run (not the same as 'not cracked')."""
+    john_exe = find_tool(
+        "john",
+        ["john.exe", "john"],
+        zip_stem="john-1.9.0-jumbo-1-win64",
+    )
+    if not john_exe:
+        return ""
+    h = hash_value.strip().lower()
+    fmt = _JOHN_FORMAT.get(len(h))
+    if not fmt:
+        return ""  # John's raw formats here only cover MD5/SHA1/SHA256
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="decko_john_"))
+    hash_file = tmp_dir / "hash.txt"
+    wl_file   = tmp_dir / "wordlist.txt"
+    pot_file  = tmp_dir / "john.pot"
+    try:
+        hash_file.write_text(h + "\n")
+        wl_file.write_text("\n".join(wordlist))
+        subprocess.run(
+            [john_exe, f"--format={fmt}", f"--pot={pot_file}",
+             f"--wordlist={wl_file}", str(hash_file)],
+            capture_output=True, text=True, timeout=120,
+        )
+        show = subprocess.run(
+            [john_exe, f"--format={fmt}", f"--pot={pot_file}",
+             "--show", str(hash_file)],
+            capture_output=True, text=True, timeout=30,
+        )
+        out = show.stdout.strip()
+        if ":" in out and not out.lower().startswith("0 password"):
+            cracked_pw = out.split(":", 1)[1].split("\n")[0].strip()
+            return (f"[ HASH LAB — real John the Ripper, format={fmt} ]\n"
+                    f"  [CRACKED] Plain text: '{cracked_pw}'")
+        return (f"[ HASH LAB — real John the Ripper, format={fmt} ]\n"
+                f"  [-] Not found in provided wordlist")
+    except Exception as e:
+        return f"[john error] {e}"
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 def crack_hash(hash_value: str, wordlist: list) -> str:
+    """Real John the Ripper when available (MD5/SHA1/SHA256), otherwise a
+    pure-Python dictionary check."""
+    john_out = _john_crack(hash_value, wordlist)
+    if john_out:
+        return john_out
+    return _crack_hash_builtin(hash_value, wordlist)
+
+
+def _crack_hash_builtin(hash_value: str, wordlist: list) -> str:
     """Dictionary-based hash cracking for authorized lab use."""
     h = hash_value.strip().lower()
     type_map = {32: "MD5", 40: "SHA-1", 56: "SHA-224", 64: "SHA-256",
@@ -358,6 +640,27 @@ def yara_scan_file(file_path: str) -> str:
             return "\n".join(lines)
         except Exception as e:
             lines.append(f"  [!] YARA engine error: {e}")
+
+    # Try the real yara binary against the project's yara_rules/ folder
+    yara_exe = find_tool("yara", ["yara64.exe", "yara.exe", "yara"])
+    if yara_exe and YARA_RULES_DIR.exists():
+        try:
+            proc = subprocess.run(
+                [yara_exe, "-r", str(YARA_RULES_DIR), file_path],
+                capture_output=True, text=True, timeout=30,
+            )
+            out = (proc.stdout or "").strip()
+            lines.append(f"  Engine: real yara ({yara_exe})")
+            lines.append("")
+            if out:
+                lines.append("  [!] Rule(s) triggered:")
+                for row in out.splitlines():
+                    lines.append(f"    {row}")
+            else:
+                lines.append("  [+] No YARA matches — file appears clean")
+            return "\n".join(lines)
+        except Exception as e:
+            lines.append(f"  [!] yara binary error: {e}")
 
     # Fallback: byte-string signatures
     lines.append("  Engine: Built-in string signatures (yara-python not installed)")
