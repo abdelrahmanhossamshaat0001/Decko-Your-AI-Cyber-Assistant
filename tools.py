@@ -641,15 +641,24 @@ def yara_scan_file(file_path: str) -> str:
         except Exception as e:
             lines.append(f"  [!] YARA engine error: {e}")
 
-    # Try the real yara binary against the project's yara_rules/ folder
+    # Try the real YARA CLI against the project's rule files.
     yara_exe = find_tool("yara", ["yara64.exe", "yara.exe", "yara"])
     if yara_exe and YARA_RULES_DIR.exists():
         try:
+            rule_files = sorted(
+                str(path) for pattern in ("*.yar", "*.yara")
+                for path in YARA_RULES_DIR.glob(pattern)
+                if path.is_file()
+            )
+            if not rule_files:
+                raise FileNotFoundError(f"No .yar or .yara rules found in {YARA_RULES_DIR}")
             proc = subprocess.run(
-                [yara_exe, "-r", str(YARA_RULES_DIR), file_path],
+                [yara_exe, *rule_files, file_path],
                 capture_output=True, text=True, timeout=30,
             )
             out = (proc.stdout or "").strip()
+            if proc.returncode not in (0, 1):
+                raise RuntimeError((proc.stderr or out or f"exit code {proc.returncode}").strip())
             lines.append(f"  Engine: real yara ({yara_exe})")
             lines.append("")
             if out:
