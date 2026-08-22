@@ -10,9 +10,6 @@ Decko is a Windows-first desktop cybersecurity assistant for authorized defensiv
 
 ![Decko dashboard](docs/screenshots/01-dashboard.png)
 
-<details>
-<summary>More screenshots</summary>
-
 | Terminal | Coding review |
 |---|---|
 | ![Terminal](docs/screenshots/02-terminal.png) | ![Coding review](docs/screenshots/03-coding-review.png) |
@@ -28,8 +25,6 @@ Decko is a Windows-first desktop cybersecurity assistant for authorized defensiv
 | Security findings | Risk summary |
 |---|---|
 | ![Security findings](docs/screenshots/08-security-findings.png) | ![Risk summary](docs/screenshots/09-risk-summary.png) |
-
-</details>
 
 ## Features
 
@@ -70,12 +65,14 @@ Active checks require an explicit target. Decko does not invent targets, and too
 
 ## Download options
 
-The repository contains the maintainable source code. The GitHub **Releases** page contains the Windows bundle with the `DeckoTools` directory because the third-party binaries are too large for a normal source repository.
+The repository includes the maintainable source code and the bundled Windows tools under `DeckoTools/`. The large Nuclei executable is stored with Git LFS, so clone the repository with Git LFS enabled to receive the complete binary.
 
-- Source users: download or clone the repository.
-- Windows demo users: download `Decko-v3-Windows-with-tools.zip` from Releases.
+```powershell
+git lfs install
+git clone https://github.com/abdelrahmanhossamshaat0001/Decko-Your-AI-Cyber-Assistant.git
+```
 
-Do not download GitHub's automatically generated “Source code” archive if you need the bundled external tools.
+Windows Security may quarantine security-testing files. In particular, `DeckoTools/nikto-main/program/nikto.pl` could not be committed from this machine because endpoint protection blocked access to it. Download Nikto from its official repository or restore the file only when you understand the risk and intend authorized use.
 
 ## Quick start on Windows
 
