@@ -118,6 +118,12 @@ ollama serve
 
 In Decko, open Settings and use host `http://localhost:11434`, model `qwen3`, then select **Apply Ollama Brain**. The selected model must support Ollama tool calling for autonomous tool use.
 
+Decko can start the local Ollama server automatically. If `OLLAMA_MODELS` points
+to a missing drive, Decko falls back to the existing `%USERPROFILE%\.ollama\models`
+directory. Low-memory Windows systems use memory mapping and a smaller inference
+batch to avoid runner crashes. Older models such as `llama3` remain usable for
+chat, but autonomous Decko tools require a model with Ollama tool-calling support.
+
 ## External tool status
 
 Decko discovers tools on the system `PATH` and recursively under `DeckoTools/`. Supported ZIP bundles are extracted automatically on first use.
