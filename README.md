@@ -1,4 +1,4 @@
-# 🦊 Decko — AI Cyber Assistant v3
+# 🦊 Decko — AI Cyber Assistant 
 
 Decko is a Windows-first desktop cybersecurity assistant for authorized defensive work, security labs, students, and SOC workflows. It combines an AI assistant with local analysis tools, file forensics, playbooks, anomaly detection, CVE intelligence, and an audit trail.
 
@@ -176,5 +176,5 @@ Decko/
 
 ## Built by
 
-**Decko Team** · Graduation Project  
+AbdElrahman Hossam Shaat  
 *TKBW — Think, Know, Build, Work Smart.*
