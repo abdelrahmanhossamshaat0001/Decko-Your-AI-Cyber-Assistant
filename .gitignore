@@ -9,3 +9,6 @@ env/
 *.log
 .DS_Store
 Thumbs.db
+DeckoTools/
+*.zip
+*.7z
