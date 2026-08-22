@@ -1,174 +1,126 @@
-# 🦊 Decko — AI Cyber Assistant  
+# 🦊 Decko — AI Cyber Assistant v3
 
+Decko is a Windows-first desktop cybersecurity assistant for authorized defensive work, security labs, students, and SOC workflows. It combines an AI assistant with local analysis tools, file forensics, playbooks, anomaly detection, CVE intelligence, and an audit trail.
 
----
+> Use Decko only on systems and targets you own or have explicit permission to test.
 
-## What Is Decko?
+## Features
 
-Decko is an **AI-powered cybersecurity copilot** designed for defensive security workflows,
-ethical hacking teams, students, and SOC analysts.  
-It is **not just a chatbot** — it is a full desktop security workstation with:
+- Gemini cloud AI and Ollama offline mode
+- PyQt6 desktop interface with animated fox avatar
+- Network scanning with Nmap support and a built-in fallback
+- Web checks with SQLmap, Nikto, Nuclei, Gobuster support, and built-in checks
+- File hashing, YARA scanning, and signature-based fallback
+- John the Ripper integration for authorized password-audit exercises
+- ML anomaly detection using Isolation Forest
+- YAML incident-response playbooks
+- MITRE ATT&CK educational simulator with a consent gate
+- NVD CVE feed, HTML reports, SQLite audit logs, and CSV export
+- Optional text-to-speech and speech recognition
 
-- Dual AI brain (Gemini cloud + Ollama offline)
-- Animated fox avatar with lip-sync
-- Network scanner, web fuzzer, crypto workbench
-- File forensics + YARA signature engine
-- ML anomaly detection (IsolationForest)
-- YAML playbook engine for incident response
-- MITRE ATT&CK educational simulator (with consent gate)
-- Live CVE feed from NVD API 2.0
-- Full SQLite audit trail + CSV export
-- Voice output (TTS) and voice input (STT) support
+## Download options
 
----
+The repository contains the maintainable source code. The GitHub **Releases** page contains the Windows bundle with the `DeckoTools` directory because the third-party binaries are too large for a normal source repository.
 
-## Project Structure
+- Source users: download or clone the repository.
+- Windows demo users: download `Decko-v3-Windows-with-tools.zip` from Releases.
 
-```
-decko_v2/
-├── decko.py              # Main PyQt6 application (complete rewrite v2.0)
-├── tools.py              # All security tool functions
-├── requirements.txt      # Python dependencies
-├── playbooks/
-│   ├── malware_response.yaml
-│   └── ransomware_containment.yaml
-├── fox_idle.gif          # Avatar animations
-├── fox_talk.gif
-├── fox_think.gif
-├── fox.gif
-└── decko_memory.db       # SQLite audit log (auto-created)
-```
+Do not download GitHub's automatically generated “Source code” archive if you need the bundled external tools.
 
----
+## Quick start on Windows
 
-## Setup (Windows — Recommended)
+1. Install 64-bit Python 3.11 or 3.12 from [python.org](https://www.python.org/downloads/windows/) and enable **Add Python to PATH**.
+2. Extract the complete release ZIP to a normal writable directory.
+3. Double-click `setup_windows.bat`.
+4. Set `GEMINI_API_KEY` for Gemini, or configure Ollama in Decko for offline use.
+
+Manual setup:
 
 ```powershell
-cd "C:\Users\YourName\Desktop\Decko_Project"
-
-# 1. Create virtual environment
-python -m venv venv
-
-# 2. Activate it
-venv\Scripts\activate
-
-# 3. Install all dependencies
-pip install -r requirements.txt
-
-# 4. Set your Gemini API key (get one free at aistudio.google.com)
+py -3 -m venv .venv
+.venv\Scripts\activate
+python -m pip install -r requirements.txt
+python verify_installation.py --test-tools
 $env:GEMINI_API_KEY = "YOUR_KEY_HERE"
-
-# 5. Run Decko
 python decko.py
 ```
 
----
+Never commit a real API key. A local `.env` file is ignored by Git.
 
-## Setup (Linux / macOS)
+## Linux and macOS
+
+The Python application can run on Linux and macOS, but the bundled external executables are Windows builds. Install native versions of the tools on `PATH` if required.
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python verify_installation.py --test-tools
 export GEMINI_API_KEY="YOUR_KEY_HERE"
 python decko.py
 ```
 
----
+## Offline mode with Ollama
 
-## Offline Mode (Ollama — Zero Internet Required)
+Install [Ollama](https://ollama.com/), then:
 
 ```bash
-# 1. Install Ollama from https://ollama.com
-# 2. Pull a model
 ollama pull llama3
-
-# 3. Start Ollama server
 ollama serve
-
-# 4. In Decko → Settings tab → Ollama section
-#    Host:  http://localhost:11434
-#    Model: llama3
-#    Click: Apply Ollama Brain
 ```
 
----
+In Decko, open Settings and use host `http://localhost:11434`, model `llama3`, then select **Apply Ollama Brain**.
 
-## Feature Checklist
+## External tool status
 
-| Module              | Status | Notes |
-|---------------------|--------|-------|
-| PyQt6 Desktop UI    | ✅ Done | Frameless, transparent, always-on-top |
-| Fox Avatar + GIFs   | ✅ Done | Idle / Think / Talk — lip-sync on AI reply |
-| Gemini AI Chat      | ✅ Done | google-genai SDK (new + legacy fallback) |
-| Ollama Offline LLM  | ✅ Done | llama3, phi3, any Ollama model |
-| File Forensics      | ✅ Done | MD5, SHA256, size, DB log |
-| YARA Scanner        | ✅ Done | yara-python + built-in string fallback |
-| Port Scanner        | ✅ Done | 25 common ports, risk flagging |
-| Web Directory Fuzz  | ✅ Done | 23 sensitive paths + security headers |
-| Crypto Workbench    | ✅ Done | SHA256, MD5, Base64, password gen |
-| Hash Dictionary     | ✅ Done | Crack MD5 against wordlist |
-| Static Code Audit   | ✅ Done | 16 risk patterns, multi-severity |
-| ML Anomaly Detect   | ✅ Done | IsolationForest, auto-collection |
-| Playbook Engine     | ✅ Done | YAML, 2 sample playbooks included |
-| MITRE Simulator     | ✅ Done | 8 techniques, consent gate |
-| CVE Live Feed       | ✅ Done | NVD API 2.0, keyword filter |
-| Voice Output (TTS)  | ✅ Done | pyttsx3 toggle in Settings |
-| Voice Input (STT)   | ✅ Done | SpeechRecognition + microphone |
-| HTML Report Gen     | ✅ Done | Full styled report, opens in browser |
-| SQLite Audit Log    | ✅ Done | All ops, forensics, playbooks, sims |
-| Log CSV Export      | ✅ Done | Export to file |
-| System Monitor      | ✅ Done | Live CPU + RAM in status bar |
+Decko discovers tools on the system `PATH` and recursively under `DeckoTools/`. Supported ZIP bundles are extracted automatically on first use.
 
----
+| Tool | Included in Windows release | Notes |
+|---|---:|---|
+| Nmap | Yes | Some scan types need Npcap, the Microsoft Visual C++ runtime, and administrator rights. |
+| SQLmap | Yes | Runs with the active Python interpreter. |
+| John the Ripper | Yes | Windows Security may quarantine password-auditing binaries. Restore only if downloaded from the official release and you intend authorized use. |
+| Nikto | Yes | Requires Strawberry Perl on `PATH` plus `JSON` and `XML::Writer` (`cpan JSON XML::Writer`). |
+| Nuclei | Yes, compressed | Extracts on first use; templates can require an Internet connection. |
+| Gobuster | Yes, compressed | Official Windows x64 build; extracts automatically on first use. |
+| YARA CLI | Yes | `yara.exe` is included; `yara-python` remains an optional alternative. |
 
-## Security & Ethics
+Run this any time to check the current machine:
 
-Decko is designed **exclusively for authorized defensive security work**.
+```powershell
+python verify_installation.py --test-tools
+```
 
-- No malware generation
-- No unauthorized exploitation
-- No credential brute-force or stealth features
-- Consent gate required before any simulation
-- All operations immutably logged with timestamps
-- Works fully offline (Ollama mode) — zero data leakage
+An optional tool being unavailable does not prevent the main application from starting; Decko falls back where supported and reports the limitation.
 
----
+For a strict external-tool check, use `python verify_installation.py --test-tools --strict-tools`. This may fail when an optional runtime or antivirus exception is missing even though the main Decko interface can run.
 
-## Graduation Demo Flow
+## Project layout
 
-1. **Dashboard** — Click "Run Demo" to load all scenarios
-2. **Terminal** — Chat with Decko AI
-3. **Forensics** — Load a file → hash → YARA scan
-4. **Arsenal → Network** — Scan 127.0.0.1
-5. **Arsenal → Web** — Fuzz http://localhost
-6. **Arsenal → Crypto** — Hash + Base64 operations
-7. **Coding** — Click "Analyze Code Risks" on pre-loaded risky sample
-8. **Anomaly** — Watch ML collect baseline (8 samples) → Run Analysis
-9. **Playbook** — Select malware_response.yaml → Execute
-10. **Simulator** — Choose T1059.001 → Consent → Run
-11. **Intel** — Fetch CVEs (keyword: Apache or Windows)
-12. **Dashboard** — Click "Generate Report" → opens HTML in browser
+```text
+Decko/
+├── decko.py
+├── tools.py
+├── verify_installation.py
+├── setup_windows.bat
+├── requirements.txt
+├── playbooks/
+├── yara_rules/
+├── fox.gif / fox_idle.gif / fox_talk.gif / fox_think.gif
+└── DeckoTools/                 # Release bundle only; ignored by Git
+```
 
----
+`decko_memory.db` is created locally at runtime and is ignored by Git.
 
-## Dependencies
+## Security and limitations
 
-| Package | Purpose |
-|---------|---------|
-| PyQt6 | Desktop GUI |
-| google-genai | Gemini AI brain |
-| psutil | System metrics |
-| requests | HTTP tools + CVE feed |
-| PyYAML | Playbook engine |
-| scikit-learn | ML anomaly detection |
-| numpy | Numerical data for ML |
-| pyttsx3 | Offline text-to-speech |
-| SpeechRecognition | Voice input |
-
----
+- No malware generation or unauthorized exploitation is intended.
+- Simulations require user consent and operations are logged.
+- Tool output is not proof that a target is safe; validate important findings manually.
+- Third-party tools keep their own licenses and are not authored by the Decko project.
+- A clean static check cannot guarantee every Windows machine, antivirus policy, driver, network, or API configuration. Use `verify_installation.py` after extraction.
 
 ## Built by
-AbdElrahman Hossam
 
+**Decko Team** · Graduation Project  
 *TKBW — Think, Know, Build, Work Smart.*
