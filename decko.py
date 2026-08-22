@@ -4,7 +4,7 @@ Graduation Project · Complete Edition
 All bugs fixed · All planned features implemented
 """
 
-import sys, os, threading, time, random, string, hashlib, base64, sqlite3, webbrowser, re, ipaddress
+import sys, os, threading, time, random, string, hashlib, base64, sqlite3, webbrowser
 from datetime import datetime
 from html import escape
 from pathlib import Path
@@ -115,9 +115,11 @@ DECISION PROCESS
    answer directly and do not call a tool merely to look active.
 3. If execution is needed, select the smallest relevant tool set from the map
    below. Do not run every tool by default.
-4. For an active network or web test, require an explicit target. If the target
-   is clearly external/third-party with no context, ask one concise confirmation,
-   then proceed. No repetitive warnings.
+4. For an active network or web test, require an explicit target. Treat a single
+   private, loopback, or link-local target as the operator's authorized local/lab
+   scope and execute the appropriate discovery tool immediately. If the target is
+   public or clearly third-party with no ownership context, ask one concise
+   authorization confirmation, then execute after confirmation without asking again.
 5. Use returned output as evidence. Never invent findings, versions,
    vulnerabilities, paths, or successful execution.
 6. If a tool is missing or fails, state the exact limitation and propose a safe
@@ -234,7 +236,7 @@ def agent_check_tool_status() -> str:
 
 
 def agent_network_scan(target: str) -> str:
-    """Scan an explicitly provided authorized IP address or hostname for open ports using Nmap when available."""
+    """Scan one local/private target, or one explicitly authorized public target, for open ports using Nmap when available."""
     return _agent_tool_result("network_scan", tools.scan_ports(target))
 
 
@@ -305,96 +307,6 @@ DECKO_AGENT_TOOLS = [
     agent_system_snapshot,
 ]
 
-
-_AUTHORIZATION_WORDS = (
-    "authorized", "authorised", "i own", "my device", "my server",
-    "مصرح", "مصرّح", "جهازي", "سيرفري", "ملكي",
-)
-
-
-def _authorized_in_request(text: str) -> bool:
-    low = text.casefold()
-    return any(word in low for word in _AUTHORIZATION_WORDS)
-
-
-def _extract_single_ip(text: str):
-    """Return one valid IP only; ranges and ambiguous multi-target input are rejected."""
-    candidates = re.findall(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])", text)
-    valid = []
-    for candidate in candidates:
-        try:
-            valid.append(ipaddress.ip_address(candidate))
-        except ValueError:
-            continue
-    if len(valid) != 1 or "/" in text or "-" in text:
-        return None
-    return valid[0]
-
-
-def _format_routed_result(tool_name: str, result: str) -> str:
-    return (
-        "===MODE===\n[LOCAL TOOL ROUTER]\n\n"
-        "===TOOLS===\n"
-        f"- {tool_name}\n  Executed locally by Decko's deterministic router.\n\n"
-        "===FINDINGS===\n"
-        f"{result}\n\n"
-        "===LIMITS===\n"
-        "The findings reflect the actual local tool output only.\n\n"
-        "===END==="
-    )
-
-
-def route_deterministic_tool_request(text: str):
-    """Execute unambiguous tool requests before an AI model can decline or invent them.
-
-    The router accepts one target/input only. Private, loopback, and link-local IP
-    scans run directly; public targets require explicit authorization in the request.
-    """
-    if not TOOLS_OK:
-        return None
-
-    raw = text.strip()
-    low = raw.casefold()
-
-    scan_words = ("scan", "scaan", "scann", "port scan", "افحص", "فحص", "امسح")
-    ip = _extract_single_ip(raw)
-    if ip is not None and any(word in low for word in scan_words):
-        if not (ip.is_private or ip.is_loopback or ip.is_link_local or _authorized_in_request(raw)):
-            return (
-                "[ROUTER] Public target detected. Confirm ownership or authorization in "
-                "the same request, for example: 'Scan my authorized server 203.0.113.10'."
-            )
-        return _format_routed_result("agent_network_scan", agent_network_scan(str(ip)))
-
-    if any(phrase in low for phrase in ("tool status", "check tools", "installed tools",
-                                         "حالة الادوات", "حالة الأدوات", "افحص الادوات", "افحص الأدوات")):
-        return _format_routed_result("agent_check_tool_status", agent_check_tool_status())
-
-    mitre = re.search(r"\bT\d{4}(?:\.\d{3})?\b", raw, re.IGNORECASE)
-    if mitre and any(word in low for word in ("mitre", "simulate", "simulation", "محاكاة")):
-        return _format_routed_result("agent_mitre_simulation",
-                                     agent_mitre_simulation(mitre.group(0).upper()))
-
-    hash_match = re.search(r"\b(?:[a-fA-F0-9]{32}|[a-fA-F0-9]{40}|[a-fA-F0-9]{64})\b", raw)
-    if hash_match and any(word in low for word in ("hash", "audit", "crack", "حلل", "افحص")):
-        return _format_routed_result("agent_hash_audit", agent_hash_audit(hash_match.group(0)))
-
-    if "cve" in low:
-        keyword = re.sub(r"(?i)\b(?:search|find|fetch|check|for|about|cve|ابحث|عن|هات)\b", " ", raw)
-        keyword = " ".join(keyword.split()).strip(" :-")
-        if keyword:
-            return _format_routed_result("agent_cve_search", agent_cve_search(keyword))
-
-    if any(phrase in low for phrase in ("system snapshot", "host snapshot", "system status",
-                                         "حالة الجهاز", "لقطة النظام")):
-        return _format_routed_result("agent_system_snapshot", agent_system_snapshot())
-
-    code_prefix = re.match(r"(?is)^\s*(?:audit|review|analyze|افحص|راجع)\s+(?:this\s+)?code\s*:\s*(.+)$", raw)
-    if code_prefix and code_prefix.group(1).strip():
-        return _format_routed_result("agent_code_audit",
-                                     agent_code_audit(code_prefix.group(1).strip()))
-
-    return None
 
 # ════════════════════════════════════════════════════════════════════════════
 #  DATABASE
@@ -537,11 +449,15 @@ needed from the user's natural-language request. Use the minimum relevant tools,
 and use more than one only when their results are complementary. Never claim a
 tool ran unless you received its result. Clearly name the tool(s) used and
 separate observed findings from recommendations. Ask for a missing target or
-file path instead of inventing one. Run active network or web checks only when
-the user explicitly requests them and provides an authorized target. Do not use
-these tools for destructive actions, persistence, evasion, malware deployment,
-credential theft, or unauthorized access. If a tool reports that a dependency
-is missing, explain the exact requirement instead of fabricating output.
+file path instead of inventing one. The tools belong to you, the Decko agent:
+when execution is required, CALL the selected function instead of describing,
+simulating, or merely naming it. A single private, loopback, or link-local IP
+provided for a scan is an authorized local/lab target and should be executed
+immediately. For a public target with no ownership context, ask one concise
+authorization question; after confirmation, call the tool. Do not use tools for
+destructive actions, persistence, evasion, malware deployment, credential theft,
+or unauthorized access. If a tool reports that a dependency is missing, explain
+the exact requirement instead of fabricating output.
 """
             chat_config = _new_genai.types.GenerateContentConfig(
                 tools=DECKO_AGENT_TOOLS,
@@ -598,13 +514,7 @@ class BrainThread(QThread):
 
     def run(self):
         try:
-            reply = route_deterministic_tool_request(self._text)
-            if reply is None:
-                if self._adapter is None:
-                    raise RuntimeError(
-                        "AI brain not initialized. Set GEMINI_API_KEY or configure Ollama in Settings."
-                    )
-                reply = self._adapter.send(self._text)
+            reply = self._adapter.send(self._text)
             self.response_ready.emit(reply)
         except Exception as e:
             self.error_occurred.emit(f"Brain error: {e}")
@@ -1535,14 +1445,15 @@ class DeckoDashboard(QWidget):
         if "generate report" in low:
             self._generate_report()
             return
-        if low.startswith("scan "):
-            target = cmd.split(maxsplit=1)[1].strip()
-            self._net_target.setText(target)
-            self._run_portscan()
-            return
         if "exploit" in low:
             self._terminal.append("[SYSTEM] Offensive exploitation is disabled.")
             self._exploit_status = "Blocked: offensive exploitation. Defensive only."
+            return
+
+        if not self._brain:
+            self._terminal.append(
+                "[SYSTEM] AI brain not initialized.\n"
+                "         Set GEMINI_API_KEY or configure Ollama in Settings.")
             return
 
         self._is_busy = True
