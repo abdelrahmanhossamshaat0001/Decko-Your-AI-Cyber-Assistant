@@ -4,7 +4,7 @@ Graduation Project · Complete Edition
 All bugs fixed · All planned features implemented
 """
 
-import sys, os, threading, time, random, string, hashlib, base64, sqlite3, webbrowser
+import sys, os, threading, time, random, string, hashlib, base64, sqlite3, webbrowser, inspect, json
 from datetime import datetime
 from html import escape
 from pathlib import Path
@@ -307,6 +307,73 @@ DECKO_AGENT_TOOLS = [
     agent_system_snapshot,
 ]
 
+DECKO_AGENT_TOOL_REGISTRY = {tool.__name__: tool for tool in DECKO_AGENT_TOOLS}
+
+
+def _agent_tool_schema(tool) -> dict:
+    """Create a provider-neutral function schema from a Decko tool wrapper."""
+    properties = {}
+    required = []
+    for name, parameter in inspect.signature(tool).parameters.items():
+        properties[name] = {"type": "string"}
+        if parameter.default is inspect.Parameter.empty:
+            required.append(name)
+    return {
+        "type": "function",
+        "function": {
+            "name": tool.__name__,
+            "description": inspect.getdoc(tool) or f"Run Decko tool {tool.__name__}",
+            "parameters": {
+                "type": "object",
+                "properties": properties,
+                "required": required,
+                "additionalProperties": False,
+            },
+        },
+    }
+
+
+DECKO_AGENT_TOOL_SCHEMAS = [_agent_tool_schema(tool) for tool in DECKO_AGENT_TOOLS]
+
+
+def execute_decko_agent_tool(tool_name: str, arguments) -> str:
+    """Execute one whitelisted tool call selected by any supported AI provider."""
+    tool = DECKO_AGENT_TOOL_REGISTRY.get(tool_name)
+    if tool is None:
+        return f"[Decko agent runtime] Unknown tool: {tool_name}"
+    if isinstance(arguments, str):
+        try:
+            arguments = json.loads(arguments)
+        except json.JSONDecodeError:
+            return f"[Decko agent runtime] Invalid arguments for {tool_name}"
+    if not isinstance(arguments, dict):
+        return f"[Decko agent runtime] Invalid arguments for {tool_name}"
+    try:
+        inspect.signature(tool).bind(**arguments)
+        return str(tool(**arguments))
+    except TypeError as exc:
+        return f"[Decko agent runtime] Bad arguments for {tool_name}: {exc}"
+    except Exception as exc:
+        return f"[Decko agent runtime] {tool_name} failed: {exc}"
+
+
+DECKO_AGENT_INSTRUCTION = """
+You are an autonomous Decko agent with access to local defensive security tools.
+The tools belong to you, regardless of which model provider is active. Decide
+from the user's natural-language request whether execution is needed, select the
+minimum relevant tool or tools, call them yourself, inspect their real results,
+and then answer. Never merely describe or name a tool when the request requires
+execution, and never claim a tool ran unless a result was returned. Ask for a
+missing target or file path instead of inventing one. A single private,
+loopback, or link-local IP is an authorized local/lab target and should be
+processed immediately. For a public target without ownership context, ask one
+concise authorization question before calling a scanning tool. Do not perform
+destructive actions, persistence, evasion, malware deployment, credential
+theft, or unauthorized access. If a dependency is missing, report the exact
+requirement. You are in an agent loop and may make multiple complementary tool
+calls before giving the final response.
+""".strip()
+
 
 # ════════════════════════════════════════════════════════════════════════════
 #  DATABASE
@@ -442,23 +509,7 @@ class GeminiAdapter:
             self.sdk     = "google-genai"
             self._client = _new_genai.Client(api_key=api_key)
             
-            agent_instruction = system_instruction + """
-
-You can call Decko's local defensive security tools. Decide whether a tool is
-needed from the user's natural-language request. Use the minimum relevant tools,
-and use more than one only when their results are complementary. Never claim a
-tool ran unless you received its result. Clearly name the tool(s) used and
-separate observed findings from recommendations. Ask for a missing target or
-file path instead of inventing one. The tools belong to you, the Decko agent:
-when execution is required, CALL the selected function instead of describing,
-simulating, or merely naming it. A single private, loopback, or link-local IP
-provided for a scan is an authorized local/lab target and should be executed
-immediately. For a public target with no ownership context, ask one concise
-authorization question; after confirmation, call the tool. Do not use tools for
-destructive actions, persistence, evasion, malware deployment, credential theft,
-or unauthorized access. If a tool reports that a dependency is missing, explain
-the exact requirement instead of fabricating output.
-"""
+            agent_instruction = system_instruction + "\n\n" + DECKO_AGENT_INSTRUCTION
             chat_config = _new_genai.types.GenerateContentConfig(
                 tools=DECKO_AGENT_TOOLS,
                 system_instruction=agent_instruction,
@@ -487,20 +538,52 @@ the exact requirement instead of fabricating output.
         return self._chat.send_message(text).text
 
 class OllamaAdapter:
-    """Talks to a local Ollama server."""
+    """Provider adapter with the same autonomous Decko tool loop as Gemini."""
     
     def __init__(self, host, model, system_prompt=""):
         self.host   = host
         self.model  = model
         
-        self.system = system_prompt
+        self.system = system_prompt + "\n\n" + DECKO_AGENT_INSTRUCTION
         self.sdk    = "ollama"
+        self._messages = [{"role": "system", "content": self.system}]
 
     def send(self, text: str) -> str:
         if not TOOLS_OK:
             return "tools.py missing — cannot reach Ollama"
-        return tools.ollama_chat(text, model=self.model,
-                                 host=self.host, system_prompt=self.system)
+        self._messages.append({"role": "user", "content": text})
+        for _ in range(7):
+            message = tools.ollama_chat_messages(
+                self._messages,
+                model=self.model,
+                host=self.host,
+                tool_schemas=DECKO_AGENT_TOOL_SCHEMAS,
+            )
+            assistant_message = {
+                "role": "assistant",
+                "content": message.get("content", ""),
+            }
+            tool_calls = message.get("tool_calls") or []
+            if tool_calls:
+                assistant_message["tool_calls"] = tool_calls
+            self._messages.append(assistant_message)
+
+            if not tool_calls:
+                return assistant_message["content"] or "No response from Ollama"
+
+            for call in tool_calls:
+                function_call = call.get("function") or {}
+                tool_name = function_call.get("name", "")
+                result = execute_decko_agent_tool(
+                    tool_name, function_call.get("arguments", {})
+                )
+                self._messages.append({
+                    "role": "tool",
+                    "tool_name": tool_name,
+                    "content": result,
+                })
+
+        return "Decko agent stopped after 7 tool rounds to prevent an endless loop."
 
 
 class BrainThread(QThread):
@@ -718,7 +801,7 @@ class DeckoDashboard(QWidget):
         try:
             if mode == "ollama":
                 host  = getattr(self, "_ollama_host_val", "http://localhost:11434")
-                model = getattr(self, "_ollama_model_val", "llama3")
+                model = getattr(self, "_ollama_model_val", "qwen3")
                 self._brain = OllamaAdapter(host, model, DECKO_SYSTEM_PROMPT)
                 print(f"[Brain] Ollama  model={model}  host={host}")
             else:
@@ -1326,7 +1409,8 @@ class DeckoDashboard(QWidget):
                             "border-radius:6px;padding-top:10px;margin-top:6px;}")
         ol = QFormLayout(o_box)
         self._ollama_host  = _input("http://localhost:11434")
-        self._ollama_model = _input("llama3")
+        self._ollama_model = _input("qwen3")
+        self._ollama_model.setToolTip("Use an Ollama model that supports tool calling, such as qwen3")
         b_check_ollama = _btn("🔍  Check Ollama", _BTN_GRAY)
         b_apply_ollama = _btn("✔  Apply Ollama Brain", _BTN_GREEN)
         b_check_ollama.clicked.connect(self._check_ollama_status)
@@ -1770,7 +1854,7 @@ class DeckoDashboard(QWidget):
     def _apply_brain(self, mode: str):
         if mode == "ollama":
             self._ollama_host_val  = self._ollama_host.text().strip() or "http://localhost:11434"
-            self._ollama_model_val = self._ollama_model.text().strip() or "llama3"
+            self._ollama_model_val = self._ollama_model.text().strip() or "qwen3"
         self._setup_brain(mode)
         self._refresh_brain_label()
         if self._brain:
@@ -1964,4 +2048,3 @@ if __name__ == "__main__":
     dash = DeckoDashboard()
     dash.show()
     sys.exit(app.exec())
-
