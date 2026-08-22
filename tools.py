@@ -14,6 +14,7 @@ import base64
 import string
 import random
 import threading
+import time
 import subprocess
 import shutil
 import zipfile
@@ -1094,21 +1095,74 @@ def fetch_recent_cves(keyword: str = "", limit: int = 8) -> str:
 #  OLLAMA CLIENT
 # ════════════════════════════════════════════════════════════════════════════
 
-def check_ollama(host: str = "http://localhost:11434") -> tuple:
+def check_ollama(host: str = "http://localhost:11434", timeout: int = 10) -> tuple:
     """Returns (is_available: bool, models: list)."""
     try:
-        r = requests.get(f"{host}/api/tags", timeout=2)
+        r = requests.get(f"{host}/api/tags", timeout=timeout)
         models = [m["name"] for m in r.json().get("models", [])]
         return r.status_code == 200, models
     except Exception:
         return False, []
 
 
+def start_ollama(host: str = "http://localhost:11434") -> tuple:
+    """Start the local Ollama server and return (ok, models, status message)."""
+    ok, models = check_ollama(host, timeout=3)
+    if ok:
+        return True, models, "already running"
+
+    executable = shutil.which("ollama")
+    if not executable and os.name == "nt":
+        candidate = Path.home() / "AppData" / "Local" / "Programs" / "Ollama" / "ollama.exe"
+        if candidate.exists():
+            executable = str(candidate)
+    if not executable:
+        return False, [], "Ollama is not installed"
+
+    env = os.environ.copy()
+    configured_models = env.get("OLLAMA_MODELS", "").strip()
+    if configured_models and not Path(configured_models).exists():
+        local_models = Path.home() / ".ollama" / "models"
+        if local_models.exists():
+            env["OLLAMA_MODELS"] = str(local_models)
+
+    creationflags = 0
+    if os.name == "nt":
+        creationflags = (getattr(subprocess, "CREATE_NO_WINDOW", 0) |
+                         getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+    try:
+        subprocess.Popen(
+            [executable, "serve"],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            creationflags=creationflags,
+        )
+    except Exception as exc:
+        return False, [], f"Could not start Ollama: {exc}"
+
+    for _ in range(12):
+        time.sleep(1)
+        ok, models = check_ollama(host, timeout=5)
+        if ok:
+            return True, models, "started automatically"
+    return False, [], "Ollama started but did not become ready within 60 seconds"
+
+
 def ollama_chat_messages(messages: list, model: str = "qwen3",
                          host: str = "http://localhost:11434",
                          tool_schemas: list = None) -> dict:
     """Send a full chat turn to Ollama and return its assistant message."""
-    payload = {"model": model, "messages": messages, "stream": False}
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": False,
+        "options": {
+            "use_mmap": True,
+            "num_batch": 64,
+        },
+    }
     if tool_schemas:
         payload["tools"] = tool_schemas
     try:
