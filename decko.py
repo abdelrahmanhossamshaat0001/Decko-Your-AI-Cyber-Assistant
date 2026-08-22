@@ -374,6 +374,13 @@ requirement. You are in an agent loop and may make multiple complementary tool
 calls before giving the final response.
 """.strip()
 
+OLLAMA_CHAT_ONLY_SYSTEM = """
+You are Decko, a concise defensive cybersecurity assistant. Reply in the user's
+language. Help only with authorized, safe, and educational security work. Never
+fabricate results. This model has no tool-calling support, so explain clearly
+when a request requires a tool-capable model.
+""".strip()
+
 
 # ════════════════════════════════════════════════════════════════════════════
 #  DATABASE
@@ -543,22 +550,39 @@ class OllamaAdapter:
     def __init__(self, host, model, system_prompt=""):
         self.host   = host
         self.model  = model
-        
+        self._base_system = system_prompt
         self.system = system_prompt + "\n\n" + DECKO_AGENT_INSTRUCTION
         self.sdk    = "ollama"
         self._messages = [{"role": "system", "content": self.system}]
+        self._supports_tools = True
 
     def send(self, text: str) -> str:
         if not TOOLS_OK:
             return "tools.py missing — cannot reach Ollama"
         self._messages.append({"role": "user", "content": text})
         for _ in range(7):
-            message = tools.ollama_chat_messages(
-                self._messages,
-                model=self.model,
-                host=self.host,
-                tool_schemas=DECKO_AGENT_TOOL_SCHEMAS,
-            )
+            try:
+                message = tools.ollama_chat_messages(
+                    self._messages,
+                    model=self.model,
+                    host=self.host,
+                    tool_schemas=(DECKO_AGENT_TOOL_SCHEMAS
+                                  if self._supports_tools else None),
+                )
+            except RuntimeError as exc:
+                if self._supports_tools and "does not support tools" in str(exc).lower():
+                    self._supports_tools = False
+                    self._messages[0] = {
+                        "role": "system",
+                        "content": OLLAMA_CHAT_ONLY_SYSTEM,
+                    }
+                    message = tools.ollama_chat_messages(
+                        self._messages,
+                        model=self.model,
+                        host=self.host,
+                    )
+                else:
+                    raise
             assistant_message = {
                 "role": "assistant",
                 "content": message.get("content", ""),
@@ -569,7 +593,11 @@ class OllamaAdapter:
             self._messages.append(assistant_message)
 
             if not tool_calls:
-                return assistant_message["content"] or "No response from Ollama"
+                reply = assistant_message["content"] or "No response from Ollama"
+                if not self._supports_tools:
+                    reply += ("\n\n[Decko: this Ollama model supports chat only; "
+                              "select a tool-calling model for autonomous tools.]")
+                return reply
 
             for call in tool_calls:
                 function_call = call.get("function") or {}
@@ -1855,6 +1883,16 @@ class DeckoDashboard(QWidget):
         if mode == "ollama":
             self._ollama_host_val  = self._ollama_host.text().strip() or "http://localhost:11434"
             self._ollama_model_val = self._ollama_model.text().strip() or "qwen3"
+            if TOOLS_OK:
+                ok, _ = tools.check_ollama(self._ollama_host_val, timeout=5)
+                if not ok:
+                    self._ollama_status_lbl.setText("Status: starting Ollama…")
+                    QApplication.processEvents()
+                    ok, models, status_note = tools.start_ollama(self._ollama_host_val)
+                    if not ok:
+                        self._ollama_status_lbl.setText(f"Status: ✗ {status_note}")
+                        QMessageBox.warning(self, "Decko", status_note)
+                        return
         self._setup_brain(mode)
         self._refresh_brain_label()
         if self._brain:
@@ -1869,11 +1907,18 @@ class DeckoDashboard(QWidget):
             return
         host = self._ollama_host.text().strip() or "http://localhost:11434"
         ok, models = tools.check_ollama(host)
+        status_note = "running"
+        if not ok:
+            self._ollama_status_lbl.setText("Status: starting Ollama…")
+            QApplication.processEvents()
+            ok, models, status_note = tools.start_ollama(host)
         if ok:
             mlist = ", ".join(models[:5]) or "none pulled"
-            self._ollama_status_lbl.setText(f"Status: ✓ Running  |  Models: {mlist}")
+            self._ollama_status_lbl.setText(
+                f"Status: ✓ Running ({status_note})  |  Models: {mlist}"
+            )
         else:
-            self._ollama_status_lbl.setText("Status: ✗ Not running — run: ollama serve")
+            self._ollama_status_lbl.setText(f"Status: ✗ {status_note}")
 
     def _toggle_tts(self, state):
         self._tts_on = state == Qt.CheckState.Checked.value
