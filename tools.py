@@ -1104,7 +1104,32 @@ def check_ollama(host: str = "http://localhost:11434") -> tuple:
         return False, []
 
 
-def ollama_chat(prompt: str, model: str = "llama3",
+def ollama_chat_messages(messages: list, model: str = "qwen3",
+                         host: str = "http://localhost:11434",
+                         tool_schemas: list = None) -> dict:
+    """Send a full chat turn to Ollama and return its assistant message."""
+    payload = {"model": model, "messages": messages, "stream": False}
+    if tool_schemas:
+        payload["tools"] = tool_schemas
+    try:
+        r = requests.post(f"{host}/api/chat", json=payload, timeout=120)
+        if r.status_code != 200:
+            detail = r.text.strip()[:500]
+            raise RuntimeError(f"Ollama HTTP {r.status_code}: {detail}")
+        message = r.json().get("message")
+        if not isinstance(message, dict):
+            raise RuntimeError("Ollama returned no assistant message")
+        return message
+    except requests.ConnectionError as exc:
+        raise RuntimeError(
+            "Ollama is not running. Start it with 'ollama serve', then pull a "
+            "tool-capable model with 'ollama pull qwen3'."
+        ) from exc
+    except requests.Timeout as exc:
+        raise RuntimeError("Ollama timed out while processing the agent turn") from exc
+
+
+def ollama_chat(prompt: str, model: str = "qwen3",
                 host: str = "http://localhost:11434",
                 system_prompt: str = "") -> str:
     """Send a message to local Ollama and return the reply."""
@@ -1113,18 +1138,8 @@ def ollama_chat(prompt: str, model: str = "llama3",
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
     try:
-        r = requests.post(
-            f"{host}/api/chat",
-            json={"model": model, "messages": messages, "stream": False},
-            timeout=120,
-        )
-        if r.status_code == 200:
-            return r.json().get("message", {}).get("content", "No response from Ollama")
-        return f"Ollama error: HTTP {r.status_code}"
-    except requests.ConnectionError:
-        return ("Ollama is not running.\n"
-                "Start it with:  ollama serve\n"
-                "Then pull a model:  ollama pull llama3")
+        message = ollama_chat_messages(messages, model=model, host=host)
+        return message.get("content", "No response from Ollama")
     except Exception as e:
         return f"Ollama error: {e}"
 
