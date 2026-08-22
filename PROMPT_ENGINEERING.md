@@ -37,6 +37,19 @@ Decko is expected to:
 | Run a safe MITRE simulation | `agent_mitre_simulation` |
 | Inspect the local system | `agent_system_snapshot` |
 
+## Deterministic local router
+
+Before a request reaches Gemini or Ollama, Decko now checks for unambiguous
+tool intents locally. A single private, loopback, or link-local IP combined
+with a scan command is executed through `agent_network_scan` even when the
+command contains a common typo such as `scaan`. The same router handles clear
+tool-status, MITRE simulation, hash-audit, CVE-search, system-snapshot, and
+inline code-audit requests.
+
+Conceptual questions still go to the selected AI brain. Public IP scans require
+an explicit ownership or authorization phrase in the same request, and network
+ranges or multiple targets are deliberately not routed automatically.
+
 ## Evidence and safety rules
 
 Decko must never fabricate a tool result or silently broaden a target. Active
