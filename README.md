@@ -18,6 +18,23 @@ Decko is a Windows-first desktop cybersecurity assistant for authorized defensiv
 - NVD CVE feed, HTML reports, SQLite audit logs, and CSV export
 - Optional text-to-speech and speech recognition
 
+## Agent tool use
+
+With the Gemini brain enabled, the main chat is connected directly to Decko's local tools through Gemini automatic function calling. The user can describe the goal naturally; Decko selects the minimum relevant tool, executes it in a background worker, and explains the observed result.
+
+Example requests:
+
+```text
+Check which security tools are ready on this computer.
+Scan 127.0.0.1 and explain the open ports.
+Check the authorized site http://localhost for exposed paths.
+Search the current CVE feed for Apache.
+Scan C:\Samples\test.exe with YARA.
+Review this Python code for security risks: ...
+```
+
+Active checks require an explicit target. Decko does not invent targets, and tool output is separated from recommendations. Ollama remains available for offline chat; automatic local-tool selection currently uses the `google-genai` brain.
+
 ## Download options
 
 The repository contains the maintainable source code. The GitHub **Releases** page contains the Windows bundle with the `DeckoTools` directory because the third-party binaries are too large for a normal source repository.
