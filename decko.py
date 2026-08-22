@@ -4,12 +4,10 @@ Graduation Project · Complete Edition
 All bugs fixed · All planned features implemented
 """
 
-from http import client
 import sys, os, threading, time, random, string, hashlib, base64, sqlite3, webbrowser
 from datetime import datetime
 from html import escape
 from pathlib import Path
-from xmlrpc import client
 from dotenv import load_dotenv
 
 from PyQt6.QtWidgets import (
@@ -25,8 +23,6 @@ from PyQt6.QtGui import QPixmap, QTextCursor, QMovie, QFont, QColor
 
 from tools import network_scanner
 
-from tools import network_scanner
-
 # ── Project directory ────────────────────────────────────────────────────────
 APP_DIR = Path(__file__).resolve().parent
 
@@ -34,7 +30,7 @@ APP_DIR = Path(__file__).resolve().parent
 load_dotenv()
 
 API_KEY           = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 try:
     from google import genai as _new_genai
@@ -1073,8 +1069,8 @@ class DeckoDashboard(QWidget):
         self._api_key_input.setPlaceholderText("Paste Gemini API key…")
         self._api_key_input.setStyleSheet(_INPUT)
         self._combo_model = QComboBox()
-        self._combo_model.addItems(["gemini-3.1-flash", "gemini-3.1-flash", "gemini-3.1-flash",
-                                    "gemini-3.1-pro", "gemini-3.1-flash"])
+        self._combo_model.addItems(["gemini-3.6-flash", "gemini-flash-latest",
+                                    "gemini-3.1-pro-preview", "gemini-flash-lite-latest"])
         self._combo_model.setCurrentText(DEFAULT_MODEL)
         self._combo_model.setStyleSheet("background:#111;color:#fff;padding:6px;border:1px solid #333;")
         b_gemini = _btn("✔  Apply Gemini Brain", _BTN_CYAN)
@@ -1318,7 +1314,9 @@ class DeckoDashboard(QWidget):
         def _done(r):
             self._scan_results = r
             self._net_out.setText(r)
-            self._terminal.append(r[:300])
+            self._terminal.append(r)
+            self._terminal.moveCursor(QTextCursor.MoveOperation.End)
+            self._terminal.ensureCursorVisible()
             self.db.log("PORT_SCAN", target, r[:300])
             self._refresh_logs()
 
