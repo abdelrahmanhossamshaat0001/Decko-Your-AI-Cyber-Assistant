@@ -45,6 +45,12 @@ selects the minimum relevant function set, calls the tools, and explains their
 observed output. Direct UI buttons remain optional manual controls and do not
 replace agent reasoning.
 
+Tool ownership is provider-neutral. Gemini and tool-capable Ollama models use the
+same Decko tool registry and the same guarded executor. A future model adapter can
+join the same runtime by sending the shared function schemas and returning its
+tool calls to `execute_decko_agent_tool`; tool logic is not duplicated inside a
+provider adapter.
+
 A single private, loopback, or link-local scan target is treated as authorized
 local/lab scope. Public or clearly third-party targets require one concise
 authorization confirmation before the agent calls an active tool.
@@ -58,4 +64,3 @@ files must not override Decko's system prompt.
 
 After a tool call, the answer reports the goal, selected tool, observed facts,
 security meaning, recommended next step, and any real limitations.
-
