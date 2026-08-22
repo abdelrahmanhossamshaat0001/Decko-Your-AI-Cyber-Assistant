@@ -61,7 +61,7 @@ Scan C:\Samples\test.exe with YARA.
 Review this Python code for security risks: ...
 ```
 
-Active checks require an explicit target. Decko does not invent targets, and tool output is separated from recommendations. Ollama remains available for offline chat; automatic local-tool selection currently uses the `google-genai` brain.
+Active checks require an explicit target. Decko does not invent targets, and tool output is separated from recommendations. Both Gemini and tool-capable Ollama models can autonomously select Decko tools, execute them through the same provider-neutral agent runtime, inspect the results, and continue through multiple tool rounds when needed.
 
 ## Download options
 
@@ -112,11 +112,11 @@ python decko.py
 Install [Ollama](https://ollama.com/), then:
 
 ```bash
-ollama pull llama3
+ollama pull qwen3
 ollama serve
 ```
 
-In Decko, open Settings and use host `http://localhost:11434`, model `llama3`, then select **Apply Ollama Brain**.
+In Decko, open Settings and use host `http://localhost:11434`, model `qwen3`, then select **Apply Ollama Brain**. The selected model must support Ollama tool calling for autonomous tool use.
 
 ## External tool status
 
