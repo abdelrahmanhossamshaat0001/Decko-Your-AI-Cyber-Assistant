@@ -4,6 +4,33 @@ Decko is a Windows-first desktop cybersecurity assistant for authorized defensiv
 
 > Use Decko only on systems and targets you own or have explicit permission to test.
 
+## Screenshots
+
+### Dashboard
+
+![Decko dashboard](docs/screenshots/01-dashboard.png)
+
+<details>
+<summary>More screenshots</summary>
+
+| Terminal | Coding review |
+|---|---|
+| ![Terminal](docs/screenshots/02-terminal.png) | ![Coding review](docs/screenshots/03-coding-review.png) |
+
+| File forensics | Threat intelligence |
+|---|---|
+| ![File forensics](docs/screenshots/04-file-forensics.png) | ![Threat intelligence](docs/screenshots/05-threat-intelligence.png) |
+
+| Settings | AI-assisted authorized scan |
+|---|---|
+| ![Settings](docs/screenshots/06-settings.png) | ![AI-assisted authorized scan](docs/screenshots/07-ai-assisted-scan.png) |
+
+| Security findings | Risk summary |
+|---|---|
+| ![Security findings](docs/screenshots/08-security-findings.png) | ![Risk summary](docs/screenshots/09-risk-summary.png) |
+
+</details>
+
 ## Features
 
 - Gemini cloud AI and Ollama offline mode
@@ -21,6 +48,12 @@ Decko is a Windows-first desktop cybersecurity assistant for authorized defensiv
 ## Agent tool use
 
 With the Gemini brain enabled, the main chat is connected directly to Decko's local tools through Gemini automatic function calling. The user can describe the goal naturally; Decko selects the minimum relevant tool, executes it in a background worker, and explains the observed result.
+
+Decko also includes a purpose-built system prompt that defines its identity,
+mission, tool-routing policy, authorization checks, evidence rules, and response
+format. The prompt teaches the agent when to use each tool, when not to run a
+tool, how to avoid fabricated results, and how to explain findings in the
+user's language.
 
 Example requests:
 
@@ -121,6 +154,7 @@ Decko/
 ├── verify_installation.py
 ├── setup_windows.bat
 ├── requirements.txt
+├── PROMPT_ENGINEERING.md
 ├── playbooks/
 ├── yara_rules/
 ├── fox.gif / fox_idle.gif / fox_talk.gif / fox_think.gif
