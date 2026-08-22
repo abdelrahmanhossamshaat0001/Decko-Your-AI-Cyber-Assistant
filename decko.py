@@ -600,6 +600,10 @@ class BrainThread(QThread):
         try:
             reply = route_deterministic_tool_request(self._text)
             if reply is None:
+                if self._adapter is None:
+                    raise RuntimeError(
+                        "AI brain not initialized. Set GEMINI_API_KEY or configure Ollama in Settings."
+                    )
                 reply = self._adapter.send(self._text)
             self.response_ready.emit(reply)
         except Exception as e:
@@ -1539,12 +1543,6 @@ class DeckoDashboard(QWidget):
         if "exploit" in low:
             self._terminal.append("[SYSTEM] Offensive exploitation is disabled.")
             self._exploit_status = "Blocked: offensive exploitation. Defensive only."
-            return
-
-        if not self._brain:
-            self._terminal.append(
-                "[SYSTEM] AI brain not initialized.\n"
-                "         Set GEMINI_API_KEY or configure Ollama in Settings.")
             return
 
         self._is_busy = True
