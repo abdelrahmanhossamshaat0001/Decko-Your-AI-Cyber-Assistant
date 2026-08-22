@@ -37,18 +37,17 @@ Decko is expected to:
 | Run a safe MITRE simulation | `agent_mitre_simulation` |
 | Inspect the local system | `agent_system_snapshot` |
 
-## Deterministic local router
+## Agent-first tool ownership
 
-Before a request reaches Gemini or Ollama, Decko now checks for unambiguous
-tool intents locally. A single private, loopback, or link-local IP combined
-with a scan command is executed through `agent_network_scan` even when the
-command contains a common typo such as `scaan`. The same router handles clear
-tool-status, MITRE simulation, hash-audit, CVE-search, system-snapshot, and
-inline code-audit requests.
+Decko's tools belong to the AI agent rather than to a command router. Every chat
+request reaches the selected brain, which decides whether execution is needed,
+selects the minimum relevant function set, calls the tools, and explains their
+observed output. Direct UI buttons remain optional manual controls and do not
+replace agent reasoning.
 
-Conceptual questions still go to the selected AI brain. Public IP scans require
-an explicit ownership or authorization phrase in the same request, and network
-ranges or multiple targets are deliberately not routed automatically.
+A single private, loopback, or link-local scan target is treated as authorized
+local/lab scope. Public or clearly third-party targets require one concise
+authorization confirmation before the agent calls an active tool.
 
 ## Evidence and safety rules
 
