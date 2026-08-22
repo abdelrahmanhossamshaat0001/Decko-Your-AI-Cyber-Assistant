@@ -1,5 +1,5 @@
 """
-tools.py  -  Decko Security Tools Module  v2.0
+tools.py  -  Decko Security Tools Module  v3.0
 All defensive analysis tools used by the Decko AI Cyber Assistant.
 Every function has graceful fallbacks when optional libs are missing.
 """
@@ -356,7 +356,7 @@ def _web_directory_fuzzer_builtin(url: str, timeout: int = 4) -> str:
         "[ Path Enumeration ]",
     ]
     found = []
-    headers_ua = {"User-Agent": "Decko-Security-Scanner/2.0"}
+    headers_ua = {"User-Agent": "Decko-Security-Scanner/3.0"}
     for path in sensitive_paths:
         try:
             r = requests.get(url + path, timeout=timeout,
@@ -1046,7 +1046,7 @@ def fetch_recent_cves(keyword: str = "", limit: int = 8) -> str:
         r = requests.get(
             "https://services.nvd.nist.gov/rest/json/cves/2.0",
             params=params, timeout=10,
-            headers={"User-Agent": "Decko-SecurityAssistant/2.0"}
+            headers={"User-Agent": "Decko-SecurityAssistant/3.0"}
         )
         if r.status_code != 200:
             lines.append(f"  [!] NVD API returned HTTP {r.status_code}")
